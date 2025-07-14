@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Download, PieChart, Edit2, Check, X, Plus, Trash2, Settings, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo, type ChangeEvent } from 'react';
+import { Download, PieChart, Edit2, Check, X, Plus, Trash2, Settings, RefreshCw, BanknoteArrowUp, BanknoteArrowDown } from 'lucide-react';
 import Papa from 'papaparse';
 
 type Expense = {
@@ -62,7 +62,6 @@ const ExpenseCategorizer = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [categoryToEdit, setCategoryToEdit] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState<string>()
   const [sheetsData, setSheetsData] = useState<Record<'data' | 'properties', any>[]>()
   // Catégories prédéfinies basées sur l'analyse de vos données
   const [predefinedCategories, setPredefinedCategories] = useState<Record<string, string[]>>({
@@ -189,7 +188,29 @@ const ExpenseCategorizer = () => {
     link.setAttribute('download', 'depenses_categorisees.csv');
     link.click();
   };
-  const computeStats = (expenses) => {
+
+  const handleOnSelectMonth = (e: ChangeEvent<HTMLSelectElement>) => {
+    if(!e.target.value) { return; }
+    setIsProcessed(false)
+
+    const sheet = sheetsData?.find((sheet: any) => sheet.properties.title === e.target.value)
+    const processedData = sheet?.data[0].rowData
+    .filter((row: any) => row.values[columnIndexes.description] && row.values[columnIndexes.description].formattedValue.trim() !== '')
+    .map((row: any, index: number) => ({
+      id: index,
+      date: row.values[columnIndexes.date].formattedValue,
+      description: row.values[columnIndexes.description].formattedValue.trim(),
+      sousDescription: row.values[columnIndexes.sousDescription].formattedValue,
+      montant: parseFloat(row.values[columnIndexes.montant].formattedValue) || 0,
+      type: row.values[columnIndexes.type].formattedValue,
+      category: categorizeExpense(row.values[columnIndexes.description].formattedValue)
+    }));
+
+    setExpenses(processedData)
+    setIsProcessed(true)
+  }
+
+  const computeStats = (expenses: Expense[]) => {
     const categoryStats: Record<string, Record<string, number>> = {};
     let totalDebit = 0;
     let totalCredit = 0;
@@ -213,30 +234,9 @@ const ExpenseCategorizer = () => {
       totalCredit,
       netBalance: totalCredit - totalDebit
     };
-
   }
 
   const stats = useMemo(() => computeStats(expenses), [expenses])
-
-  useEffect(() => {
-    if(selectedMonth) {
-      const sheet = sheetsData?.find((sheet: any) => sheet.properties.title === selectedMonth)
-      const processedData = sheet?.data[0].rowData
-      .filter((row: any) => row.values[columnIndexes.description] && row.values[columnIndexes.description].formattedValue.trim() !== '')
-      .map((row: any, index: number) => ({
-        id: index,
-        date: row.values[columnIndexes.date].formattedValue,
-        description: row.values[columnIndexes.description].formattedValue.trim(),
-        sousDescription: row.values[columnIndexes.sousDescription].formattedValue,
-        montant: parseFloat(row.values[columnIndexes.montant].formattedValue) || 0,
-        type: row.values[columnIndexes.type].formattedValue,
-        category: categorizeExpense(row.values[columnIndexes.description].formattedValue)
-      }));
-
-      setExpenses(processedData)
-      setIsProcessed(true)
-    }
-  }, [selectedMonth])
 
   useEffect(() => {
     const fetchCSV = async () => {
@@ -282,10 +282,7 @@ const ExpenseCategorizer = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="p-6 rounded-lg">
           <select
-          onChange={(e) => {
-            setIsProcessed(false)
-            setSelectedMonth(e.target.value);
-          }}
+          onChange={handleOnSelectMonth}
           id="countries" className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
             <option value="">Choisis un mois</option>
             {
@@ -304,7 +301,7 @@ const ExpenseCategorizer = () => {
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold">-</span>
+                <BanknoteArrowUp className='text-white' />
               </div>
             </div>
             <div className="ml-4">
@@ -318,7 +315,7 @@ const ExpenseCategorizer = () => {
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold">+</span>
+                <BanknoteArrowDown className='text-white' />
               </div>
             </div>
             <div className="ml-4">

@@ -15,8 +15,7 @@ function App() {
 
   async function initializeGapiClient() {
     try {
-      console.log(import.meta.env.VITE_GAPI_API_KEY)
-      await gapi.client.init({
+      await window.gapi.client.init({
         apiKey: import.meta.env.VITE_GAPI_API_KEY,
         discoveryDocs: [DISCOVERY_DOC],
       });
@@ -26,22 +25,24 @@ function App() {
       console.error(error)
     }
   }
-  function handleAuthClick() {
-    tokenClient.callback = async (resp) => {
-      if (resp.error !== undefined) {
-        throw (resp);
-      }
-      document.getElementById('authorize_button').innerText = 'Refresh';
-      setIsReady(true)
-    };
 
-    if (gapi.client.getToken() === null) {
-      // Prompt the user to select a Google Account and ask for consent to share their data
-      // when establishing a new session.
-      tokenClient.requestAccessToken({prompt: 'consent'});
-    } else {
-      // Skip display of account chooser and consent dialog for an existing session.
-      tokenClient.requestAccessToken({prompt: ''});
+  function handleAuthClick() {
+    if(tokenClient) {
+      tokenClient.callback = async (resp: any) => {
+        if (resp.error !== undefined) {
+          throw (resp);
+        }
+        setIsReady(true)
+      };
+
+      if (window.gapi.client.getToken() === null) {
+        // Prompt the user to select a Google Account and ask for consent to share their data
+        // when establishing a new session.
+        tokenClient.requestAccessToken({prompt: 'consent'});
+      } else {
+        // Skip display of account chooser and consent dialog for an existing session.
+        tokenClient.requestAccessToken({prompt: ''});
+      }
     }
   }
 
@@ -49,11 +50,11 @@ function App() {
     if(window.gapi) {
       window.gapi.load('client', initializeGapiClient);
     }
-  }, [window.gapi])
+  })
 
   useEffect(() => {
     if(window.google) {
-      const token = google.accounts.oauth2.initTokenClient({
+      const token = window.google.accounts.oauth2.initTokenClient({
         client_id: import.meta.env.VITE_GAPI_CLIENT_ID,
         scope: SCOPES,
         callback: '', // defined later
@@ -61,8 +62,7 @@ function App() {
       setTokenClient(token)
       setGIsInitiated(true)
     }
-
-  }, [window.google])
+  }, [])
 
   if(!isReady) {
     return (
