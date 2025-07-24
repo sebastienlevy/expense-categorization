@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, type ChangeEvent } from 'react';
 import { Download, PieChart, Edit2, Check, X, Plus, Trash2, Settings, RefreshCw, BanknoteArrowUp, BanknoteArrowDown } from 'lucide-react';
 import Papa from 'papaparse';
 import { colors, columnIndexes, months } from '../utils';
+import { getAllSheets, updateSheet } from '../api/api';
 
 type Expense = {
   id: number,
@@ -20,8 +21,8 @@ type SheetData = {
 }
 
 const ExpenseCategorizer = () => {
+  const client = window.gapi.client.getToken();
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [editingIndex, setEditingIndex] = useState<number>();
   const [isProcessed, setIsProcessed] = useState<boolean>(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -42,13 +43,6 @@ const ExpenseCategorizer = () => {
       }
     }
     return 'Non catégorisé';
-  };
-
-  const updateCategory = (index: number, newCategory: string) => {
-    const updated = [...expenses];
-    updated[index].category = newCategory;
-    setExpenses(updated);
-    setEditingIndex(undefined);
   };
 
   const addNewCategory = () => {
@@ -78,7 +72,7 @@ const ExpenseCategorizer = () => {
     setCategories(newCategories);
   };
 
-  const renameCategory = (oldName: string, newName: string) => {
+  const renameCategory = async (oldName: string, newName: string) => {
     if (newName.trim() && oldName !== newName.trim() && !categories?.[newName.trim()]) {
       // Mettre à jour les transactions
       const updated = expenses.map(expense =>
@@ -92,6 +86,9 @@ const ExpenseCategorizer = () => {
       const newCategories = { ...categories };
       newCategories[newName.trim()] = newCategories[oldName];
       delete newCategories[oldName];
+      const response = await updateSheet({client, sheetId: 'Test Update', values: [["GROS PIPI II", "Envies" ]]})
+      console.log(response)
+      debugger;
       setCategories(newCategories);
 
       setCategoryToEdit('');
@@ -199,37 +196,26 @@ const ExpenseCategorizer = () => {
       console.log({build})
       build['Non catégorisé'] = 'bg-gray-100 text-gray-800'
       setCategoryColorsMapping(build)
-
     }
   }
 
   const fetchCSV = async () => {
-    setIsProcessed(false)
-    try {
-      const client = window.gapi.client.getToken();
-      const response = await fetch('https://sheets.googleapis.com/v4/spreadsheets/1Hhn2L79uE6B9tXg43SzB6wDHYPH3zEK4yHj1-1G3qDw?includeGridData=true', {
-        headers: {
-          Authorization: `Bearer ${client.access_token}`
-        }
-      })
-      if(response.ok) {
-        const data = await response.json();
-        setSheetsData(data.sheets)
-        setCategories(() => {
-          const sheet: SheetData = data.sheets.find((sheet) => sheet.properties.title === 'Catégories').data[0];
-          const categories = {}
-          sheet?.rowData.slice(1).forEach(({ values } : { values: { formattedValue: string }[] }) => {
-            const category: string = values[1].formattedValue
-            const value: string = values[0].formattedValue.split(';')
-            categories[category as string] = value
-          })
-          console.log({ categories })
-          return categories
+    setIsProcessed(false);
+    const response = await getAllSheets(client)
+    if(response) {
+      setSheetsData(response.sheets)
+      setCategories(() => {
+        const sheet: SheetData = response.sheets.find((sheet) => sheet.properties.title === 'Catégories').data[0];
+        const categories = {}
+        sheet?.rowData.slice(1).forEach(({ values } : { values: { formattedValue: string }[] }) => {
+          const category: string = values[1].formattedValue
+          const value: string = values[0].formattedValue.split(';')
+          categories[category as string] = value
         })
-        setIsProcessed(true)
-      }
-    } catch (error) {
-      console.error(error)
+        console.log({ categories })
+        return categories
+      })
+      setIsProcessed(true)
     }
   }
 
@@ -521,7 +507,6 @@ const ExpenseCategorizer = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Montant</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Catégorie</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -542,47 +527,9 @@ const ExpenseCategorizer = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {editingIndex === index ? (
-                      <select
-                        value={expense.category}
-                        onChange={(e) => updateCategory(index, e.target.value)}
-                        className="rounded border-gray-300 text-sm"
-                      >
-                        {categories && Object.keys(categories).map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                        <option value="Non catégorisé">Non catégorisé</option>
-                      </select>
-                    ) : (
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${categoryColorsMapping?.[expense.category]}`}>
-                        {expense.category}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {editingIndex === index ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setEditingIndex(undefined)}
-                          className="text-green-600 hover:text-green-800"
-                        >
-                          <Check size={16} />
-                        </button>
-                        <button
-                          onClick={() => setEditingIndex(undefined)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setEditingIndex(index)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                    )}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${categoryColorsMapping?.[expense.category]}`}>
+                      {expense.category}
+                    </span>
                   </td>
                 </tr>
               ))}

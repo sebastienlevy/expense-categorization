@@ -67,3 +67,7 @@ export default tseslint.config([
   },
 ])
 ```
+
+### Google API
+
+Google sheet api quick link: [https://developers.google.com/workspace/sheets/api/reference/rest?hl=fr](https://developers.google.com/workspace/sheets/api/reference/rest?hl=fr)
