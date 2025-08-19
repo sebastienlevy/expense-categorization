@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, type ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, type ChangeEvent, useCallback } from 'react';
 import { Download, PieChart, Edit2, Check, X, Plus, Trash2, Settings, RefreshCw, BanknoteArrowUp, BanknoteArrowDown } from 'lucide-react';
 import Papa from 'papaparse';
-import { colors, columnIndexes, months } from '../utils';
+import { colors, columnIndexes } from '../utils';
 import { getAllSheets, updateSheet } from '../api/api';
 
 type Expense = {
@@ -22,6 +22,7 @@ type SheetData = {
 
 const ExpenseCategorizer = () => {
   const client = window.gapi.client.getToken();
+  const [months, setMonths] = useState([])
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isProcessed, setIsProcessed] = useState<boolean>(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
@@ -87,10 +88,7 @@ const ExpenseCategorizer = () => {
       newCategories[newName.trim()] = newCategories[oldName];
       delete newCategories[oldName];
       const response = await updateSheet({client, sheetId: 'Test Update', values: [["GROS PIPI II", "Envies" ]]})
-      console.log(response)
-      debugger;
       setCategories(newCategories);
-
       setCategoryToEdit('');
       setEditingCategoryName('');
     }
@@ -185,7 +183,7 @@ const ExpenseCategorizer = () => {
     };
   }
 
-  const buildCategoryColors = () => {
+  const buildCategoryColors = useCallback(() => {
     const build = {}
     let i = 0
     if(categories) {
@@ -193,17 +191,20 @@ const ExpenseCategorizer = () => {
         build[category] = colors[i]
         i++
       }
-      console.log({build})
       build['Non catégorisé'] = 'bg-gray-100 text-gray-800'
       setCategoryColorsMapping(build)
     }
-  }
+  }, [categories])
 
-  const fetchCSV = async () => {
+  const fetchCSV = useCallback(async () => {
     setIsProcessed(false);
     const response = await getAllSheets(client)
     if(response) {
       setSheetsData(response.sheets)
+      setMonths(() => {
+        const monthSheets = response.sheets.filter((sheet) => sheet.properties.title !== 'Catégories');
+        return monthSheets.map((sheet) => sheet.properties.title);
+      })
       setCategories(() => {
         const sheet: SheetData = response.sheets.find((sheet) => sheet.properties.title === 'Catégories').data[0];
         const categories = {}
@@ -212,12 +213,12 @@ const ExpenseCategorizer = () => {
           const value: string = values[0].formattedValue.split(';')
           categories[category as string] = value
         })
-        console.log({ categories })
+
         return categories
       })
       setIsProcessed(true)
     }
-  }
+  }, [client])
 
   const stats = useMemo(() => computeStats(expenses), [expenses])
 
@@ -225,11 +226,11 @@ const ExpenseCategorizer = () => {
     if(categories) {
       buildCategoryColors()
     }
-  }, [categories])
+  }, [categories, buildCategoryColors])
 
   useEffect(() => {
     fetchCSV()
-  }, [])
+  }, [fetchCSV])
 
   if (!isProcessed) {
     return (
@@ -258,7 +259,7 @@ const ExpenseCategorizer = () => {
             <option value="">Choisis un mois</option>
             {
               months.map((month) => (
-                <option value={month.value} key={month.value}>{month.label}</option>
+                <option value={month} key={month}>{month}</option>
               ))
             }
           </select>
